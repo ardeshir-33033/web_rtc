@@ -1,16 +1,26 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_background/flutter_background.dart';
+// import 'package:flutter_foreground_plugin/flutter_foreground_plugin.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:get/get.dart' as Get;
+
+import 'locator.dart';
+import 'messaging_client.dart';
 
 typedef void StreamStateCallback(MediaStream stream);
 
-class Signaling {
+class Signaling extends Get.GetxController {
   Map<String, dynamic> configuration = {
     'iceServers': [
       {
+        'username': 'SRNetwork',
+        'credential': 'L96HZNDkrEZTEM',
         'urls': [
-          'stun:stun.shahryar-raeis.com'
+          'stun:stun.shahryar-raeis.com',
+          'turn:turn.shahryar-raeis.com'
           // 'stun:stun1.l.google.com:19302',
           // 'stun:stun2.l.google.com:19302'
         ]
@@ -18,14 +28,25 @@ class Signaling {
     ]
   };
 
+  RTCVideoRenderer localRenderer = RTCVideoRenderer();
+  RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
+
   RTCPeerConnection? peerConnection;
   MediaStream? localStream;
   MediaStream? remoteStream;
   String? roomId;
   String? currentRoomText;
   StreamStateCallback? onAddRemoteStream;
+  TextEditingController textEditingController = TextEditingController(text: '');
 
-  Future<String> createRoom(RTCVideoRenderer remoteRenderer) async {
+  bool enableAudio = true,
+      enableVideo = true,
+      isFrontCameraSelected = true,
+      speakerPhone = true,
+      enableTorch = false,
+      isScreenShared = false;
+
+  Future<String> createRoom() async {
     FirebaseFirestore db = FirebaseFirestore.instance;
     DocumentReference roomRef = db.collection('rooms').doc();
 
@@ -106,10 +127,12 @@ class Signaling {
     });
     // Listen for remote ICE candidates above
 
+    locator<MessagingClient>().sendSignal(roomId);
+
     return roomId;
   }
 
-  Future<void> joinRoom(String roomId, RTCVideoRenderer remoteVideo) async {
+  Future<void> joinRoom(String roomId) async {
     FirebaseFirestore db = FirebaseFirestore.instance;
     print(roomId);
     DocumentReference roomRef = db.collection('rooms').doc('$roomId');
@@ -183,21 +206,130 @@ class Signaling {
     }
   }
 
-  Future<void> openUserMedia(
-      RTCVideoRenderer localVideo,
-      RTCVideoRenderer remoteVideo,
-      ) async {
-    var stream = await navigator.mediaDevices
-        .getUserMedia({'video': true, 'audio': false});
+  Future<void> openUserMedia() async {
+    var stream = await navigator.mediaDevices.getUserMedia({
+      'video': enableVideo
+          ? {'facingMode': isFrontCameraSelected ? 'user' : 'environment'}
+          : false,
+      'audio': enableAudio
+    });
 
-    localVideo.srcObject = stream;
+    localRenderer.srcObject = stream;
     localStream = stream;
 
-    remoteVideo.srcObject = await createLocalMediaStream('key');
+    remoteRenderer.srcObject = await createLocalMediaStream('key');
+    update(["ui"]);
   }
 
-  Future<void> hangUp(RTCVideoRenderer localVideo) async {
-    List<MediaStreamTrack> tracks = localVideo.srcObject!.getTracks();
+  Future<void> makeScreenSharing() async {
+    final mediaConstraints = <String, dynamic>{'audio': true, 'video': true};
+    isScreenShared = true;
+
+    try {
+      var stream =
+          await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+      localRenderer.srcObject = stream;
+      localStream = stream;
+      replaceMediaStream(stream);
+      update(["ui"]);
+    } catch (e) {
+      print(e.toString());
+    }
+  }
+
+  disableShareScreen() async {
+    var stream = await navigator.mediaDevices.getUserMedia({
+      'video': enableVideo
+          ? {'facingMode': isFrontCameraSelected ? 'user' : 'environment'}
+          : false,
+      'audio': enableAudio
+    });
+    isScreenShared = false;
+
+    localRenderer.srcObject = stream;
+    localStream = stream;
+
+    remoteRenderer.srcObject = await createLocalMediaStream('key');
+    replaceMediaStream(stream);
+    update(["ui"]);
+  }
+
+  Future<void> replaceMediaStream(MediaStream newStream) {
+    return peerConnection?.senders.then((senders) {
+          senders.forEach((sender) async {
+            if (sender.track?.kind == 'video') {
+              if (newStream.getVideoTracks().length > 0) {
+                await sender.replaceTrack(newStream.getVideoTracks()[0]);
+              }
+            } else if (sender.track?.kind == 'audio') {
+              if (newStream.getAudioTracks().length > 0) {
+                await sender.replaceTrack(newStream.getAudioTracks()[0]);
+              }
+            }
+          });
+          return Future.value();
+        }) ??
+        Future.error(
+            Exception('An error occurred during switching the stream'));
+  }
+
+  Future<void> toggleAudio() async {
+    enableAudio = !enableAudio;
+    localStream?.getAudioTracks().forEach((track) {
+      track.enabled = enableAudio;
+    });
+    update(["ui"]);
+  }
+
+  Future<void> toggleVideo() async {
+    enableVideo = !enableVideo;
+    localStream?.getVideoTracks().forEach((track) {
+      track.enabled = enableVideo;
+    });
+    update(["ui"]);
+  }
+
+  switchCamera() {
+    // change status
+    isFrontCameraSelected = !isFrontCameraSelected;
+
+    // switch camera
+    localStream?.getVideoTracks().forEach((track) {
+      Helper.switchCamera(track);
+    });
+
+    if (isFrontCameraSelected) {
+      if (enableTorch = true) {
+        toggleTorch();
+      }
+    }
+    update(["ui"]);
+  }
+
+  toggleSpeaker() {
+    speakerPhone = !speakerPhone;
+
+    Helper.setSpeakerphoneOn(speakerPhone);
+    update(["ui"]);
+  }
+
+  toggleTorch() {
+    enableTorch = !enableTorch;
+    localStream?.getVideoTracks().forEach((track) {
+      track.setTorch(enableTorch);
+    });
+    update(["ui"]);
+  }
+
+  captureFrame() async {
+    localStream?.getVideoTracks().forEach((track) {
+      track.captureFrame();
+    });
+    update(["ui"]);
+  }
+
+  Future<void> hangUp() async {
+    List<MediaStreamTrack> tracks = localRenderer.srcObject!.getTracks();
     tracks.forEach((track) {
       track.stop();
     });
