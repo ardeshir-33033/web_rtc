@@ -34,7 +34,7 @@ class Signaling extends Get.GetxController {
   // RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
 
   MediaStream? localStream;
-  MediaStream? remoteStream;
+  // MediaStream? remoteStream;
   // String? roomId;
   // String? currentRoomText;
   StreamStateCallback? onAddRemoteStream;
@@ -49,6 +49,8 @@ class Signaling extends Get.GetxController {
 
   Future<String> createRoom() async {
     RTCPeerConnection? peerConnection;
+    RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
+    await remoteRenderer.initialize();
 
     FirebaseFirestore db = FirebaseFirestore.instance;
     DocumentReference roomRef = db.collection('rooms').doc();
@@ -59,9 +61,14 @@ class Signaling extends Get.GetxController {
 
     registerPeerConnectionListeners();
 
-    localStream?.getTracks().forEach((track) {
-      peerConnection?.addTrack(track, localStream!);
-    });
+    peerConnection.onTrack = (event) {
+      peerConnection!.addTrack(event.track, event.streams[0]);
+      remoteRenderer.srcObject = event.streams[0];
+    };
+
+    // localStream?.getTracks().forEach((track) {
+    //   peerConnection?.addTrack(track, localStream!);
+    // });
 
     // Code for collecting ICE candidates below
     var callerCandidatesCollection = roomRef.collection('callerCandidates');
@@ -84,14 +91,14 @@ class Signaling extends Get.GetxController {
     print('New room created with SDK offer. Room ID: $roomId');
     // Created a Room
 
-    peerConnection?.onTrack = (RTCTrackEvent event) {
-      print('Got remote track: ${event.streams[0]}');
-
-      event.streams[0].getTracks().forEach((track) {
-        print('Add a track to the remoteStream $track');
-        remoteStream?.addTrack(track);
-      });
-    };
+    // peerConnection?.onTrack = (RTCTrackEvent event) {
+    //   print('Got remote track: ${event.streams[0]}');
+    //
+    //   event.streams[0].getTracks().forEach((track) {
+    //     print('Add a track to the remoteStream $track');
+    //     remoteStream?.addTrack(track);
+    //   });
+    // };
 
     // Listening for remote session description below
     roomRef.snapshots().listen((snapshot) async {
@@ -129,13 +136,21 @@ class Signaling extends Get.GetxController {
     });
     // Listen for remote ICE candidates above
 
-    locator<MessagingClient>().sendSignal(roomId);
-    created = true;
+    callList.add(CallModel(
+      textController: TextEditingController(text: roomId),
+      peerConnection: peerConnection,
+      roomId: roomId,
+      remoteRenderer: remoteRenderer,
+    ));
+
+    // locator<MessagingClient>().sendSignal(roomId);
 
     return roomId;
   }
 
   Future<void> joinRoom(String roomId) async {
+    RTCPeerConnection? peerConnection;
+
     FirebaseFirestore db = FirebaseFirestore.instance;
     print(roomId);
     DocumentReference roomRef = db.collection('rooms').doc('$roomId');
@@ -164,13 +179,13 @@ class Signaling extends Get.GetxController {
       };
       // Code for collecting ICE candidate above
 
-      peerConnection?.onTrack = (RTCTrackEvent event) {
-        print('Got remote track: ${event.streams[0]}');
-        event.streams[0].getTracks().forEach((track) {
-          print('Add a track to the remoteStream: $track');
-          remoteStream?.addTrack(track);
-        });
-      };
+      // peerConnection?.onTrack = (RTCTrackEvent event) {
+      //   print('Got remote track: ${event.streams[0]}');
+      //   event.streams[0].getTracks().forEach((track) {
+      //     print('Add a track to the remoteStream: $track');
+      //     remoteStream?.addTrack(track);
+      //   });
+      // };
 
       // Code for creating SDP answer below
       var data = roomSnapshot.data() as Map<String, dynamic>;
