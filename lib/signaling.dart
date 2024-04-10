@@ -6,6 +6,7 @@ import 'package:flutter_background/flutter_background.dart';
 // import 'package:flutter_foreground_plugin/flutter_foreground_plugin.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:get/get.dart' as Get;
+import 'package:webrtc_test/call_model.dart';
 
 import 'locator.dart';
 import 'messaging_client.dart';
@@ -28,14 +29,14 @@ class Signaling extends Get.GetxController {
     ]
   };
 
+  List<CallModel> callList = [];
   RTCVideoRenderer localRenderer = RTCVideoRenderer();
-  RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
+  // RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
 
-  RTCPeerConnection? peerConnection;
   MediaStream? localStream;
   MediaStream? remoteStream;
-  String? roomId;
-  String? currentRoomText;
+  // String? roomId;
+  // String? currentRoomText;
   StreamStateCallback? onAddRemoteStream;
   TextEditingController textEditingController = TextEditingController(text: '');
 
@@ -47,6 +48,8 @@ class Signaling extends Get.GetxController {
       isScreenShared = false;
 
   Future<String> createRoom() async {
+    RTCPeerConnection? peerConnection;
+
     FirebaseFirestore db = FirebaseFirestore.instance;
     DocumentReference roomRef = db.collection('rooms').doc();
 
@@ -79,7 +82,6 @@ class Signaling extends Get.GetxController {
     await roomRef.set(roomWithOffer);
     var roomId = roomRef.id;
     print('New room created with SDK offer. Room ID: $roomId');
-    currentRoomText = 'Current room is $roomId - You are the caller!';
     // Created a Room
 
     peerConnection?.onTrack = (RTCTrackEvent event) {
@@ -128,6 +130,7 @@ class Signaling extends Get.GetxController {
     // Listen for remote ICE candidates above
 
     locator<MessagingClient>().sendSignal(roomId);
+    created = true;
 
     return roomId;
   }

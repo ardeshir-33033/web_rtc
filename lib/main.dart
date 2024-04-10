@@ -62,9 +62,14 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final Signaling signaling = locator<Signaling>();
+  Signaling signaling2 = Signaling();
 
   String? roomId;
   TextEditingController textEditingController = TextEditingController(text: '');
+
+  String? roomId2;
+  TextEditingController textEditingController2 =
+      TextEditingController(text: '');
 
   @override
   void initState() {
@@ -76,6 +81,12 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {});
     });
 
+    signaling2.localRenderer.initialize();
+    signaling2.remoteRenderer.initialize();
+    signaling2.onAddRemoteStream = ((stream) {
+      signaling2.remoteRenderer.srcObject = stream;
+      setState(() {});
+    });
     super.initState();
   }
 
@@ -83,6 +94,9 @@ class _MyHomePageState extends State<MyHomePage> {
   void dispose() {
     signaling.localRenderer.dispose();
     signaling.remoteRenderer.dispose();
+
+    signaling2.localRenderer.dispose();
+    signaling2.remoteRenderer.dispose();
     super.dispose();
   }
 
@@ -143,6 +157,53 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                   ),
                   SizedBox(height: 8),
+                  SizedBox(
+                    height: 30,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () {
+                            signaling2.openUserMedia();
+                          },
+                          child: Text("Cam & Mic 2"),
+                        ),
+                        SizedBox(
+                          width: 8,
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            roomId2 = await signaling2.createRoom();
+                            textEditingController2.text = roomId2!;
+                            setState(() {});
+                          },
+                          child: Text("Create room 2 "),
+                        ),
+                        SizedBox(
+                          width: 8,
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            // Add roomId
+                            signaling2.joinRoom(
+                              textEditingController2.text.trim(),
+                            );
+                          },
+                          child: Text("Join room 2"),
+                        ),
+                        SizedBox(
+                          width: 8,
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            signaling2.hangUp();
+                          },
+                          child: Text("Hangup 2 "),
+                        )
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 8),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -154,6 +215,21 @@ class _MyHomePageState extends State<MyHomePage> {
                                   mirror: true)),
                           Expanded(
                               child: RTCVideoView(signaling.remoteRenderer)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Expanded(
+                              child: RTCVideoView(signaling2.localRenderer,
+                                  mirror: true)),
+                          Expanded(
+                              child: RTCVideoView(signaling2.remoteRenderer)),
                         ],
                       ),
                     ),
@@ -282,7 +358,45 @@ class _MyHomePageState extends State<MyHomePage> {
                       ],
                     ),
                   ),
-                  SizedBox(height: 8)
+                  SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("Room2: "),
+                        Flexible(
+                          child: TextFormField(
+                            controller: textEditingController2,
+                          ),
+                        ),
+                        ElevatedButton(
+                            onPressed: () {
+                              if (AppGlobalData.roomId != null) {
+                                textEditingController2.text =
+                                AppGlobalData.roomId!;
+                              }
+                            },
+                            child: Container(
+                              height: 20,
+                              width: 50,
+                              child: Text("Get RoomId"),
+                            )),
+                        ElevatedButton(
+                            onPressed: () {
+                              locator<MessagingClient>().initState();
+                            },
+                            child: Container(
+                              height: 20,
+                              width: 50,
+                              child: Text("Connect"),
+                            )),
+                        Text(AppGlobalData.userId.toString()),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 8),
+
                 ],
               );
             }),
